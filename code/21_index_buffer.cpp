@@ -66,17 +66,22 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct Vertex {
-    glm::vec2 pos;
-    glm::vec3 color;
+struct Vertices {
+    std::vector<glm::vec2> pos;
+    std::vector<glm::vec3> color;
 
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    static std::array<VkVertexInputBindingDescription, 2> getBindingDescriptions() {
+        std::array<VkVertexInputBindingDescription, 2> bindingDescriptions;
 
-        return bindingDescription;
+        bindingDescriptions[0].binding = 0;
+        bindingDescriptions[0].stride = sizeof(glm::vec2);
+        bindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        bindingDescriptions[1].binding = 1;
+        bindingDescriptions[1].stride = sizeof(glm::vec3);
+        bindingDescriptions[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescriptions;
     }
 
     static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
@@ -85,22 +90,20 @@ struct Vertex {
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[0].offset = 0;
 
-        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].binding = 1;
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        attributeDescriptions[1].offset = 0;
 
         return attributeDescriptions;
     }
 };
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+const Vertices vertices = {
+    {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}},
+    {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},{0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -535,12 +538,12 @@ private:
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-        auto bindingDescription = Vertex::getBindingDescription();
-        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+        auto bindingDescriptions = Vertices::getBindingDescriptions();
+        auto attributeDescriptions = Vertices::getAttributeDescriptions();
 
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescriptions.size());
+        vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
         vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
         vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -662,15 +665,18 @@ private:
     }
 
     void createVertexBuffer() {
-        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+        size_t positionBytes = sizeof(glm::vec2) * vertices.pos.size();
+        size_t colourBytes = sizeof(glm::vec3) * vertices.color.size();
+        VkDeviceSize bufferSize = positionBytes + colourBytes;
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-        void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, vertices.data(), (size_t) bufferSize);
+        char* data;
+        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, (void**)&data);
+            memcpy(data, vertices.pos.data(), positionBytes);
+            memcpy(data + positionBytes, vertices.color.data(), colourBytes);
         vkUnmapMemory(device, stagingBufferMemory);
 
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
@@ -824,9 +830,9 @@ private:
             scissor.extent = swapChainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-            VkBuffer vertexBuffers[] = {vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            VkBuffer vertexBuffers[] = {vertexBuffer, vertexBuffer};
+            VkDeviceSize offsets[] = {0, sizeof(glm::vec2) * vertices.pos.size()};
+            vkCmdBindVertexBuffers(commandBuffer, 0, 2, vertexBuffers, offsets);
 
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
