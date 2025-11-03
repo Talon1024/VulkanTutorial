@@ -66,10 +66,12 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+// Step 1: Change the array of structs to a struct of arrays.
 struct Vertices {
     std::vector<glm::vec2> pos;
     std::vector<glm::vec3> color;
 
+    // Step 2: Two bindings; one for each attribute
     static std::array<VkVertexInputBindingDescription, 2> getBindingDescriptions() {
         std::array<VkVertexInputBindingDescription, 2> bindingDescriptions;
 
@@ -84,6 +86,7 @@ struct Vertices {
         return bindingDescriptions;
     }
 
+    // Step 3: Change bindings in attribute descriptions
     static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
         std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
 
@@ -101,6 +104,7 @@ struct Vertices {
     }
 };
 
+// Step 4: Array of structs -> struct of arrays
 const Vertices vertices = {
     {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}},
     {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},{0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}}
@@ -538,6 +542,8 @@ private:
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
+        // Step 6: Multiple vertex binding descriptions instead of a single
+        // vertex binding description.
         auto bindingDescriptions = Vertices::getBindingDescriptions();
         auto attributeDescriptions = Vertices::getAttributeDescriptions();
 
@@ -665,6 +671,7 @@ private:
     }
 
     void createVertexBuffer() {
+        // Step 7: Vertex buffer size calculation
         size_t positionBytes = sizeof(glm::vec2) * vertices.pos.size();
         size_t colourBytes = sizeof(glm::vec3) * vertices.color.size();
         VkDeviceSize bufferSize = positionBytes + colourBytes;
@@ -673,6 +680,9 @@ private:
         VkDeviceMemory stagingBufferMemory;
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
+        // Step 8: Memory mapping and copies
+        // This is char* so that pointer arithmetic advances by a single byte;
+        // Doing pointer arithmetic on void* is undefined behaviour.
         char* data;
         vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, (void**)&data);
             memcpy(data, vertices.pos.data(), positionBytes);
@@ -830,6 +840,8 @@ private:
             scissor.extent = swapChainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+            // Step 9: Bindings for the vertex buffers in the command buffer
+            // recording function. VERY IMPORTANT! Or else your PC will hang.
             VkBuffer vertexBuffers[] = {vertexBuffer, vertexBuffer};
             VkDeviceSize offsets[] = {0, sizeof(glm::vec2) * vertices.pos.size()};
             vkCmdBindVertexBuffers(commandBuffer, 0, 2, vertexBuffers, offsets);
